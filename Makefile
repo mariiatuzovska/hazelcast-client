@@ -1,19 +1,11 @@
-start-server:
-	../hazelcast-3.12.6/bin/start.sh
-
-# do not work
-start-management-center:
-	../hazelcast-3.12.6/management-center/start.sh 
-
-map-example:
-	./client map-example
-
-queue-example:
-	./client queue-example
-
-help: 
-	go build -o client
-	./client
-
 build:
 	go build -o client
+
+start-server-1:
+	../hazelcast-3.12.7-server-1/bin/start.sh
+
+start-server-2:
+	../hazelcast-3.12.7-server-2/bin/start.sh
+
+start-server-3:
+	../hazelcast-3.12.7-server-3/bin/start.sh

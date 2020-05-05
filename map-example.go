@@ -8,8 +8,8 @@ import (
 )
 
 type MapWriterChan struct {
-	Key   string
-	Value string
+	Key   interface{}
+	Value interface{}
 }
 
 var nameExampleMap = "map.capitals"
@@ -24,23 +24,15 @@ func MapWriter(name, address string, writerChan chan MapWriterChan, pinger chan 
 
 	client, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
-		log.Println(err)
-		return nil
+		fmt.Println(err)
+		return err
 	}
 
 	for {
 		temp, open := <-writerChan
-		if temp.Key != "" && open {
-			Map, err := client.GetMap(nameExampleMap)
-			if err != nil {
-				log.Println(err)
-				return nil
-			}
-			_, err = Map.Put(temp.Key, temp.Value)
-			if err != nil {
-				log.Println(err)
-				return nil
-			}
+		if temp.Key != nil && open {
+			Map, _ := client.GetMap(nameExampleMap)
+			Map.Put(temp.Key, temp.Value)
 			log.Println(fmt.Sprintf(" %s | %s | WRITES | %s : %s", name, address, temp.Key, temp.Value))
 			pinger <- true
 		} else {
@@ -64,32 +56,24 @@ func MapReader(name, address string, pinger chan bool) error {
 	client, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
 		fmt.Println(err)
-		return nil
+		return err
 	}
 
-	thisMap := make(map[string]string)
+	thisMap := make(map[interface{}]interface{})
 
 	for {
 		ok, open := <-pinger
 		if open && ok {
-			Map, err := client.GetMap(nameExampleMap)
-			if err != nil {
-				log.Println(err)
-				return nil
-			}
-			keysSet, err := Map.KeySet()
-			var keys = []string{}
+			Map, _ := client.GetMap(nameExampleMap)
+			keysSet, _ := Map.KeySet()
+			var keys = make([]interface{}, 0)
 			for _, k := range keysSet {
-				keys = append(keys, k.(string))
+				keys = append(keys, k)
 			}
 			for _, key := range keys {
 				if _, exist := thisMap[key]; !exist {
-					value, err := Map.Get(key)
-					if err != nil {
-						log.Println(err)
-						return nil
-					}
-					thisMap[key] = value.(string)
+					value, _ := Map.Get(key)
+					thisMap[key] = value
 					log.Println(fmt.Sprintf(" %s | %s | READS | %s : %s", name, address, key, value))
 				}
 			}

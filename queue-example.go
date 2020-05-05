@@ -25,8 +25,8 @@ func QueueWriter(name, address string, writerChan chan QueueWriterChan, pinger c
 
 	client, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
-		log.Println(err)
-		return nil
+		fmt.Println(err)
+		return err
 	}
 
 	for {
@@ -57,7 +57,7 @@ func QueueReader(name, address string, pinger chan bool) error {
 	client, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
 		fmt.Println(err)
-		return nil
+		return err
 	}
 
 	for {

@@ -11,10 +11,15 @@ import (
 	"github.com/urfave/cli"
 )
 
+var (
+	ServiceName = "hazelcast-examples"
+	Version     = "0.0.2"
+)
+
 func main() {
 	app := cli.NewApp()
 	app.Name = ServiceName
-	app.Usage = fmt.Sprintf("%s command line client", ServiceName)
+	app.Usage = "command line client"
 	app.Description = ""
 	app.Version = Version
 	app.Copyright = "2020, mariiatuzovska"
@@ -36,38 +41,42 @@ func main() {
 			Action: topicExample,
 		},
 		{
-			Name:   "lock-example",
-			Usage:  "Presents lock-example",
-			Action: lockExample,
+			Name:   "pessimistic-lock-example",
+			Usage:  "Presents pessimistic-lock-example for map",
+			Action: pessimisticLockExample,
+		},
+		{
+			Name:   "optimistic-lock-example",
+			Usage:  "Presents optimistic-lock-example for map",
+			Action: optimisticLockExample,
 		},
 	}
 	app.Run(os.Args)
 }
 
 var (
-	ServiceName = "hazelcast-go-client"
-	Version     = "0.0.1"
+	nameLockExampleMap = "lock.example.map"
 
 	capitalsMap = map[string]string{
-		"Belarus":  "Minsk",
-		"Belgium":  "Brussels",
-		"Brazil":   "Brasilia",
-		"Bulgaria": "Sofia",
-		"Chile":    "Santiago",
-		"China":    "Beijing",
-		"Cyprus":   "Nicosia",
-		"Egypt":    "Cairo",
-		"Estonia":  "Tallinn",
-		"Germany":  "Berlin",
-		"Greece":   "Athens",
-		"Japan":    "Tokyo",
-		"Morocco":  "Rabat",
-		"Poland":   "Warsaw",
-		"Slovakia": "Bratislava",
-		"Spain":    "Madrid",
-		"Thailand": "Bangkok",
-		"Ukraine":  "Kyiv",
-		"United Kingdom	": "London",
+		"Belarus":        "Minsk",
+		"Belgium":        "Brussels",
+		"Brazil":         "Brasilia",
+		"Bulgaria":       "Sofia",
+		"Chile":          "Santiago",
+		"China":          "Beijing",
+		"Cyprus":         "Nicosia",
+		"Egypt":          "Cairo",
+		"Estonia":        "Tallinn",
+		"Germany":        "Berlin",
+		"Greece":         "Athens",
+		"Japan":          "Tokyo",
+		"Morocco":        "Rabat",
+		"Poland":         "Warsaw",
+		"Slovakia":       "Bratislava",
+		"Spain":          "Madrid",
+		"Thailand":       "Bangkok",
+		"Ukraine":        "Kyiv",
+		"United Kingdom": "London",
 	}
 )
 
@@ -77,9 +86,9 @@ func mapExample(c *cli.Context) error {
 	Bob := make(chan MapWriterChan)   // writer will write BobsWriterChan.Key : BobsWriterChan.Value into map "Map"
 	pinger := make(chan bool)
 
-	go MapWriter("Alice", "192.168.0.100:5701", Alice, pinger)
-	go MapWriter("Bob", "192.168.0.100:5702", Bob, pinger)
-	go MapReader("Carl", "192.168.0.100:5703", pinger)
+	go MapWriter("Alice", "192.168.0.102:5701", Alice, pinger)
+	go MapWriter("Bob", "192.168.0.102:5702", Bob, pinger)
+	go MapReader("Carl", "192.168.0.102:5703", pinger)
 
 	i := 0
 	for key, value := range capitalsMap {
@@ -105,7 +114,7 @@ func mapExample(c *cli.Context) error {
 	config := hazelcast.NewConfig()
 	config.GroupConfig().SetName("dev")
 	config.GroupConfig().SetPassword("dev-pass")
-	config.NetworkConfig().AddAddress("192.168.0.100:5701")
+	config.NetworkConfig().AddAddress("192.168.0.102:5701")
 
 	client, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
@@ -130,15 +139,108 @@ func mapExample(c *cli.Context) error {
 	return nil
 }
 
+func pessimisticLockExample(c *cli.Context) error {
+
+	config := hazelcast.NewConfig()
+	name, address := "PESSIMISTIC", "192.168.0.102:5701"
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress(address)
+	config.SetClientName(name)
+
+	client, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	Map, _ := client.GetMap(nameLockExampleMap)
+	var key int64 = 1
+	Map.Put(key, int64(0))
+
+	for k := 0; k < 10; k++ {
+		err := Map.Lock(key)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		value, err := Map.Get(key)
+		if err != nil {
+			log.Println(fmt.Sprintf(" %s | %s | ERROR | Get from map: %s", name, address, err.Error()))
+		}
+		time.Sleep(time.Duration(1) * time.Second)
+		v := value.(int64)
+		v++
+		_, err = Map.Put(key, v)
+		if err != nil {
+			log.Println(fmt.Sprintf(" %s | %s | ERROR | Put into map: %s", name, address, err.Error()))
+		}
+		err = Map.Unlock(key)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+	}
+
+	val, _ := Map.Get(key)
+	log.Println(fmt.Sprintf(" %s | %s | RESULT | %d", name, address, val.(int64)))
+	Map.Delete(key)
+	client.Shutdown()
+
+	return nil
+}
+
+func optimisticLockExample(c *cli.Context) error {
+
+	config := hazelcast.NewConfig()
+	name, address := "OPTIMISTIC", "192.168.0.102:5701"
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress(address)
+	config.SetClientName(name)
+
+	client, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+
+	Map, _ := client.GetMap(nameLockExampleMap)
+	var key int64 = 1
+	Map.Put(key, int64(0))
+
+	for k := 0; k < 1000; k++ {
+		if k%10 == 0 {
+			log.Println(fmt.Sprintf(" %s | %s | AT | %d", name, address, k))
+		}
+		for {
+			oldValue, _ := Map.Get(key)
+			newValue := oldValue.(int64)
+			time.Sleep(time.Duration(10) * time.Millisecond)
+			newValue++
+			if _, err := Map.Replace(key, newValue); err == nil {
+				break
+			}
+		}
+	}
+
+	val, _ := Map.Get(key)
+	log.Println(fmt.Sprintf(" %s | %s | RESULT | %d", name, address, val.(int64)))
+	Map.Delete(key)
+	client.Shutdown()
+
+	return nil
+}
+
 func queueExample(c *cli.Context) error {
 
 	Alice := make(chan QueueWriterChan) // writer will write Value into queue
 	Bob := make(chan QueueWriterChan)
 	pinger := make(chan bool)
 
-	go QueueWriter("Alice", "192.168.0.100:5701", Alice, pinger)
-	go QueueWriter("Bob", "192.168.0.100:5702", Bob, pinger)
-	go QueueReader("Carl", "192.168.0.100:5703", pinger)
+	go QueueWriter("Alice", "192.168.0.102:5701", Alice, pinger)
+	go QueueWriter("Bob", "192.168.0.102:5702", Bob, pinger)
+	go QueueReader("Carl", "192.168.0.102:5703", pinger)
 
 	i := 0
 	for _, value := range capitalsMap {
@@ -168,8 +270,8 @@ func topicExample(c *cli.Context) error {
 	Alice := make(chan TopicWriterChan)
 	Bob := make(chan TopicWriterChan)
 
-	go TopicWriter("Alice", "192.168.0.100:5701", topicMessageListener, Alice)
-	go TopicWriter("Bob", "192.168.0.100:5702", topicMessageListener, Bob)
+	go TopicWriter("Alice", "192.168.0.102:5701", topicMessageListener, Alice)
+	go TopicWriter("Bob", "192.168.0.102:5702", topicMessageListener, Bob)
 
 	i := 0
 	for _, value := range capitalsMap {
@@ -182,9 +284,5 @@ func topicExample(c *cli.Context) error {
 		i++
 	}
 
-	return nil
-}
-
-func lockExample(c *cli.Context) error {
 	return nil
 }
