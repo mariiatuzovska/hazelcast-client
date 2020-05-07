@@ -147,50 +147,73 @@ func mapExample(c *cli.Context) error {
 func pessimisticLockExample(c *cli.Context) error {
 
 	config := hazelcast.NewConfig()
-	name, address := "PESSIMISTIC", "192.168.0.102:5701"
 	config.GroupConfig().SetName("dev")
 	config.GroupConfig().SetPassword("dev-pass")
-	config.NetworkConfig().AddAddress(address)
-	config.SetClientName(name)
-
-	client, err := hazelcast.NewClientWithConfig(config)
+	config.NetworkConfig().AddAddress("192.168.0.102:5701")
+	config.SetClientName("c1")
+	client1, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	config = hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5702")
+	config.SetClientName("c2")
+	client2, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	config = hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5703")
+	config.SetClientName("c3")
+	client3, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
 		fmt.Println(err)
 		return err
 	}
 
-	Map, _ := client.GetMap(nameLockExampleMap)
-	var key int64 = 1
-	Map.PutIfAbsent(key, int64(0))
+	Map1, _ := client1.GetMap("new.map")
+	Map2, _ := client2.GetMap("new.map")
+	Map3, _ := client3.GetMap("new.map")
+	Map1.PutIfAbsent(int64(1), int64(0))
+	times := make(chan bool, 10)
 
-	for k := 0; k < 10; k++ {
-		err := Map.Lock(key)
-		if err != nil {
-			fmt.Println(err)
-			return err
+	var Routine = func(Map core.Map, t chan bool) {
+		for k := 0; k < 1000; k++ {
+			if k%100 == 0 {
+				fmt.Println(k)
+			}
+			Map.Lock(int64(1))
+			value, _ := Map.Get(int64(1))
+			v := value.(int64)
+			v++
+			Map.Put(int64(1), v)
+			Map.Unlock(int64(1))
 		}
-		value, err := Map.Get(key)
-		if err != nil {
-			log.Println(fmt.Sprintf(" %s | %s | ERROR | Get from map: %s", name, address, err.Error()))
-		}
-		time.Sleep(time.Duration(1) * time.Second)
-		v := value.(int64)
-		v++
-		_, err = Map.PutIfAbsent(key, v)
-		if err != nil {
-			log.Println(fmt.Sprintf(" %s | %s | ERROR | Put into map: %s", name, address, err.Error()))
-		}
-		err = Map.Unlock(key)
-		if err != nil {
-			fmt.Println(err)
-			return err
-		}
+		t <- true
 	}
 
-	val, _ := Map.Get(key)
-	log.Println(fmt.Sprintf(" %s | %s | RESULT | %d", name, address, val.(int64)))
-	Map.Delete(key)
-	client.Shutdown()
+	go Routine(Map1, times)
+	go Routine(Map2, times)
+	go Routine(Map3, times)
+
+	// wait
+	<-times
+	<-times
+	<-times
+
+	val, _ := Map1.Get(int64(1))
+	log.Println(fmt.Sprintf("RESULT = %d", val.(int64)))
+	Map1.Delete(int64(1))
+
+	client1.Shutdown()
+	client2.Shutdown()
+	client3.Shutdown()
 
 	return nil
 }
