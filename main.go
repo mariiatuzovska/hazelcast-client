@@ -37,6 +37,11 @@ func main() {
 			Action: queueExample,
 		},
 		{
+			Name:   "bounded-queue-example",
+			Usage:  "Presents queue-example",
+			Action: boundedQueueExample,
+		},
+		{
 			Name:   "topic-example",
 			Usage:  "Presents topic-example",
 			Action: topicExample,
@@ -287,6 +292,76 @@ func optimisticLockExample(c *cli.Context) error {
 	val, _ := Map1.Get(int64(1))
 	log.Println(fmt.Sprintf("RESULT = %d", val.(int64)))
 	Map1.Delete(int64(1))
+
+	client1.Shutdown()
+	client2.Shutdown()
+	client3.Shutdown()
+
+	return nil
+}
+
+func boundedQueueExample(c *cli.Context) error {
+	config := hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5701")
+	config.SetClientName("c1")
+	client1, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	config = hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5702")
+	config.SetClientName("c2")
+	client2, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	config = hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5703")
+	config.SetClientName("c3")
+	client3, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	Queue1, _ := client1.GetQueue("queue")
+	Queue2, _ := client2.GetQueue("queue")
+	Queue3, _ := client3.GetQueue("queue")
+	times := make(chan bool, 10)
+
+	var Routine = func(Queue core.Queue, t chan bool) {
+		for k := 0; k < 10; k++ {
+			err := Queue.Put(k)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println(k)
+			time.Sleep(time.Duration(2) * time.Second)
+		}
+		t <- true
+	}
+
+	go Routine(Queue1, times)
+	go Routine(Queue2, times)
+	go Routine(Queue3, times)
+
+	// wait
+	<-times
+	<-times
+	<-times
+
+	fmt.Println("RESULT")
+	for i := 0; i < 10; i++ {
+		value, _ := Queue1.Take()
+		fmt.Println(value)
+	}
 
 	client1.Shutdown()
 	client2.Shutdown()
