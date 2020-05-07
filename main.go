@@ -231,7 +231,7 @@ func optimisticLockExample(c *cli.Context) error {
 	Map1, _ := client1.GetMap("new.map")
 	Map2, _ := client2.GetMap("new.map")
 	Map3, _ := client3.GetMap("new.map")
-	Map1.Put(1, int64(0))
+	Map1.Put(int64(1), int64(0))
 	times := make(chan bool, 10)
 
 	var Routine = func(Map core.Map, t chan bool) {
@@ -240,12 +240,16 @@ func optimisticLockExample(c *cli.Context) error {
 				fmt.Println(k)
 			}
 			for {
-				oldValue, _ := Map.Get(1)
-				newValue := oldValue.(int64)
-				newValue++
-				_, err := Map.PutIfAbsent(1, newValue)
-				if err != nil {
-					log.Println(err)
+				oldValue, _ := Map.Get(int64(1))
+				newValue := oldValue.(int64) + 1
+				time.Sleep(time.Duration(10) * time.Millisecond)
+				// ov, _ := Map.PutIfAbsent(int64(1), newValue)
+				// if ov == oldValue {
+				// 	break
+				// }
+				ok, _ := Map.ReplaceIfSame(int64(1), oldValue, newValue)
+				if ok {
+					break
 				}
 			}
 		}
@@ -261,9 +265,9 @@ func optimisticLockExample(c *cli.Context) error {
 	<-times
 	<-times
 
-	val, _ := Map1.Get(1)
+	val, _ := Map1.Get(int64(1))
 	log.Println(fmt.Sprintf("RESULT = %d", val.(int64)))
-	Map1.Delete(1)
+	Map1.Delete(int64(1))
 
 	client1.Shutdown()
 	client2.Shutdown()
