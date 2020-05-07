@@ -8,6 +8,7 @@ import (
 	"time"
 
 	hazelcast "github.com/hazelcast/hazelcast-go-client"
+	"github.com/hazelcast/hazelcast-go-client/core"
 	"github.com/urfave/cli"
 )
 
@@ -197,41 +198,76 @@ func pessimisticLockExample(c *cli.Context) error {
 func optimisticLockExample(c *cli.Context) error {
 
 	config := hazelcast.NewConfig()
-	name, address := "OPTIMISTIC", "192.168.0.102:5701"
 	config.GroupConfig().SetName("dev")
 	config.GroupConfig().SetPassword("dev-pass")
-	config.NetworkConfig().AddAddress(address)
-	config.SetClientName(name)
-
-	client, err := hazelcast.NewClientWithConfig(config)
+	config.NetworkConfig().AddAddress("192.168.0.102:5701")
+	config.SetClientName("c1")
+	client1, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	config = hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5702")
+	config.SetClientName("c2")
+	client2, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	config = hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5703")
+	config.SetClientName("c3")
+	client3, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
 		fmt.Println(err)
 		return err
 	}
 
-	Map, _ := client.GetMap(nameLockExampleMap)
-	var key int64 = 1
-	Map.Put(key, int64(0))
+	Map1, _ := client1.GetMap("new.map")
+	Map2, _ := client2.GetMap("new.map")
+	Map3, _ := client3.GetMap("new.map")
+	Map1.Put(1, int64(0))
+	times := make(chan bool, 10)
 
-	for k := 0; k < 1000; k++ {
-		if k%10 == 0 {
-			log.Println(fmt.Sprintf(" %s | %s | AT | %d", name, address, k))
-		}
-		for {
-			oldValue, _ := Map.Get(key)
-			newValue := oldValue.(int64)
-			time.Sleep(time.Duration(10) * time.Millisecond)
-			newValue++
-			if _, err := Map.Replace(key, newValue); err == nil {
-				break
+	var Routine = func(Map core.Map, t chan bool) {
+		for k := 0; k < 1000; k++ {
+			if k%100 == 0 {
+				fmt.Println(k)
+			}
+			for {
+				oldValue, _ := Map.Get(1)
+				newValue := oldValue.(int64)
+				newValue++
+				_, err := Map.PutIfAbsent(1, newValue)
+				if err != nil {
+					log.Println(err)
+				}
 			}
 		}
+		t <- true
 	}
 
-	val, _ := Map.Get(key)
-	log.Println(fmt.Sprintf(" %s | %s | RESULT | %d", name, address, val.(int64)))
-	Map.Delete(key)
-	client.Shutdown()
+	go Routine(Map1, times)
+	go Routine(Map2, times)
+	go Routine(Map3, times)
+
+	// wait
+	<-times
+	<-times
+	<-times
+
+	val, _ := Map1.Get(1)
+	log.Println(fmt.Sprintf("RESULT = %d", val.(int64)))
+	Map1.Delete(1)
+
+	client1.Shutdown()
+	client2.Shutdown()
+	client3.Shutdown()
 
 	return nil
 }
