@@ -50,6 +50,10 @@ func main() {
 			Usage:  "Presents optimistic-lock-example for map",
 			Action: optimisticLockExample,
 		},
+		{
+			Name:   "task",
+			Action: task,
+		},
 	}
 	app.Run(os.Args)
 }
@@ -283,6 +287,64 @@ func topicExample(c *cli.Context) error {
 		}
 		i++
 	}
+
+	return nil
+}
+
+func task(c *cli.Context) error {
+	config := hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5701")
+	config.SetClientName("Alice")
+	Alice, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	config = hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5702")
+	config.SetClientName("Bob")
+	Bob, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	config = hazelcast.NewConfig()
+	config.GroupConfig().SetName("dev")
+	config.GroupConfig().SetPassword("dev-pass")
+	config.NetworkConfig().AddAddress("192.168.0.102:5703")
+	config.SetClientName("Bob")
+	Carl, err := hazelcast.NewClientWithConfig(config)
+	if err != nil {
+		fmt.Println(err)
+		return err
+	}
+	AlicesMap, _ := Alice.GetMap("task.map")
+	BobsMap, _ := Bob.GetMap("task.map")
+	CarlsMap, _ := Carl.GetMap("task.map")
+	values, _ := CarlsMap.Values()
+	fmt.Println(len(values))
+	for i := 0; i < 333; i++ {
+		j := i * 3
+		AlicesMap.Put(j, j)
+		BobsMap.Put(j+1, j+1)
+		CarlsMap.Put(j+2, j+2)
+	}
+	Alice.Shutdown()
+	Bob.Shutdown()
+
+	values, _ = CarlsMap.Values()
+	fmt.Println(len(values))
+	for i := 0; i < 1000; i++ {
+		CarlsMap.Delete(i)
+	}
+
+	// Alice.Shutdown()
+	// Bob.Shutdown()
+	Carl.Shutdown()
 
 	return nil
 }
