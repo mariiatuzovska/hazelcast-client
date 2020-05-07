@@ -161,7 +161,7 @@ func pessimisticLockExample(c *cli.Context) error {
 
 	Map, _ := client.GetMap(nameLockExampleMap)
 	var key int64 = 1
-	Map.Put(key, int64(0))
+	Map.PutIfAbsent(key, int64(0))
 
 	for k := 0; k < 10; k++ {
 		err := Map.Lock(key)
@@ -176,7 +176,7 @@ func pessimisticLockExample(c *cli.Context) error {
 		time.Sleep(time.Duration(1) * time.Second)
 		v := value.(int64)
 		v++
-		_, err = Map.Put(key, v)
+		_, err = Map.PutIfAbsent(key, v)
 		if err != nil {
 			log.Println(fmt.Sprintf(" %s | %s | ERROR | Put into map: %s", name, address, err.Error()))
 		}
@@ -231,7 +231,7 @@ func optimisticLockExample(c *cli.Context) error {
 	Map1, _ := client1.GetMap("new.map")
 	Map2, _ := client2.GetMap("new.map")
 	Map3, _ := client3.GetMap("new.map")
-	Map1.Put(int64(1), int64(0))
+	Map1.PutIfAbsent(int64(1), int64(0))
 	times := make(chan bool, 10)
 
 	var Routine = func(Map core.Map, t chan bool) {
@@ -243,10 +243,6 @@ func optimisticLockExample(c *cli.Context) error {
 				oldValue, _ := Map.Get(int64(1))
 				newValue := oldValue.(int64) + 1
 				time.Sleep(time.Duration(10) * time.Millisecond)
-				// ov, _ := Map.PutIfAbsent(int64(1), newValue)
-				// if ov == oldValue {
-				// 	break
-				// }
 				ok, _ := Map.ReplaceIfSame(int64(1), oldValue, newValue)
 				if ok {
 					break
@@ -369,9 +365,9 @@ func task(c *cli.Context) error {
 	fmt.Println(len(values))
 	for i := 0; i < 333; i++ {
 		j := i * 3
-		AlicesMap.Put(j, j)
-		BobsMap.Put(j+1, j+1)
-		CarlsMap.Put(j+2, j+2)
+		AlicesMap.PutIfAbsent(j, j)
+		BobsMap.PutIfAbsent(j+1, j+1)
+		CarlsMap.PutIfAbsent(j+2, j+2)
 	}
 	Alice.Shutdown()
 	Bob.Shutdown()
