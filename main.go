@@ -334,9 +334,7 @@ func boundedQueueExample(c *cli.Context) error {
 	Queue1, _ := client1.GetQueue("queue")
 	Queue2, _ := client2.GetQueue("queue")
 	Queue3, _ := client3.GetQueue("queue")
-	z := make([]interface{}, 0)
-	Queue3.DrainTo(&z)
-
+	Queue3.Clear()
 	// <queue name="queue">
 	// 	<max-size>5</max-size>
 	// 	<backup-count>1</backup-count>
