@@ -304,7 +304,7 @@ func boundedQueueExample(c *cli.Context) error {
 	config := hazelcast.NewConfig()
 	config.GroupConfig().SetName("dev")
 	config.GroupConfig().SetPassword("dev-pass")
-	config.NetworkConfig().AddAddress("192.168.0.102:5701")
+	config.NetworkConfig().AddAddress("192.168.0.100:5701")
 	config.SetClientName("c1")
 	client1, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
@@ -314,7 +314,7 @@ func boundedQueueExample(c *cli.Context) error {
 	config = hazelcast.NewConfig()
 	config.GroupConfig().SetName("dev")
 	config.GroupConfig().SetPassword("dev-pass")
-	config.NetworkConfig().AddAddress("192.168.0.102:5702")
+	config.NetworkConfig().AddAddress("192.168.0.100:5702")
 	config.SetClientName("c2")
 	client2, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
@@ -324,7 +324,7 @@ func boundedQueueExample(c *cli.Context) error {
 	config = hazelcast.NewConfig()
 	config.GroupConfig().SetName("dev")
 	config.GroupConfig().SetPassword("dev-pass")
-	config.NetworkConfig().AddAddress("192.168.0.102:5703")
+	config.NetworkConfig().AddAddress("192.168.0.100:5703")
 	config.SetClientName("c3")
 	client3, err := hazelcast.NewClientWithConfig(config)
 	if err != nil {
@@ -334,33 +334,38 @@ func boundedQueueExample(c *cli.Context) error {
 	Queue1, _ := client1.GetQueue("queue")
 	Queue2, _ := client2.GetQueue("queue")
 	Queue3, _ := client3.GetQueue("queue")
-	times := make(chan bool, 10)
+	z := make([]interface{}, 0)
+	Queue3.DrainTo(&z)
 
-	var Routine = func(Queue core.Queue, t chan bool) {
+	// <queue name="queue">
+	// 	<max-size>5</max-size>
+	// 	<backup-count>1</backup-count>
+	// 	<async-backup-count>0</async-backup-count>
+	// 	<empty-queue-ttl>-1</empty-queue-ttl>
+	// </queue>
+	var Routine = func(Queue core.Queue) {
 		for k := 0; k < 10; k++ {
-			err := Queue.Put(k)
-			if err != nil {
-				fmt.Println(err)
+			for {
+				ok, _ := Queue.Offer(k) // Offer inserts the given item to the end of the queue if there is room.
+				// If queue is full, offer operation fails. Offer returns true if the item is added, false otherwise.
+				if ok {
+					break
+				}
 			}
-			fmt.Println(k)
-			time.Sleep(time.Duration(2) * time.Second)
+			fmt.Println("PUT", k)
+			time.Sleep(time.Duration(1) * time.Second)
 		}
-		t <- true
 	}
 
-	go Routine(Queue1, times)
-	go Routine(Queue2, times)
-	go Routine(Queue3, times)
+	go Routine(Queue1)
+	go Routine(Queue2)
 
-	// wait
-	<-times
-	<-times
-	<-times
+	time.Sleep(time.Duration(10) * time.Second)
 
-	fmt.Println("RESULT")
-	for i := 0; i < 10; i++ {
-		value, _ := Queue1.Take()
-		fmt.Println(value)
+	for i := 0; i < 20; i++ {
+		value, _ := Queue3.Take()
+		fmt.Println("TAKE", value)
+		time.Sleep(time.Duration(1) * time.Second)
 	}
 
 	client1.Shutdown()
