@@ -341,7 +341,7 @@ func boundedQueueExample(c *cli.Context) error {
 	// 	<async-backup-count>0</async-backup-count>
 	// 	<empty-queue-ttl>-1</empty-queue-ttl>
 	// </queue>
-	var Routine = func(Queue core.Queue) {
+	var Writer = func(Queue core.Queue) {
 		for k := 0; k < 10; k++ {
 			for {
 				ok, _ := Queue.Offer(k) // Offer inserts the given item to the end of the queue if there is room.
@@ -351,20 +351,28 @@ func boundedQueueExample(c *cli.Context) error {
 				}
 			}
 			fmt.Println("PUT", k)
-			time.Sleep(time.Duration(1) * time.Second)
 		}
 	}
 
-	go Routine(Queue1)
-	go Routine(Queue2)
+	go Writer(Queue1)
 
 	time.Sleep(time.Duration(10) * time.Second)
 
-	for i := 0; i < 20; i++ {
-		value, _ := Queue3.Take()
-		fmt.Println("TAKE", value)
-		time.Sleep(time.Duration(1) * time.Second)
+	var Reader = func(Queue core.Queue, str string) {
+		for {
+			if empty, _ := Queue.IsEmpty(); !empty {
+				value, _ := Queue3.Take()
+				fmt.Println(str, " TAKE ", value)
+				time.Sleep(time.Duration(2) * time.Second)
+			}
+		}
 	}
+
+	go Reader(Queue2, "2")
+	go Reader(Queue3, "3")
+
+	forever := make(chan bool)
+	<-forever
 
 	client1.Shutdown()
 	client2.Shutdown()
